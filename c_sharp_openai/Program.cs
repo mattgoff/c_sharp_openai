@@ -1,4 +1,5 @@
-﻿using c_sharp_openai.Models;
+﻿using System.Globalization;
+using c_sharp_openai.Models;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using RestSharp;
@@ -36,7 +37,8 @@ namespace c_sharp_openai
                 var jsonObject = new
                 {
                     model = "gpt-3.5-turbo",
-                    temperature = 0.2,
+                    // model = "text-davinci-003",
+                    temperature = 0.7,
                     messages = new[]
                     {
                         new
@@ -75,13 +77,26 @@ namespace c_sharp_openai
                 while (true)
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("EXIT_CHAT and SEND_CHAT to do the thing");
                     Console.Write("You: ");
                     Console.ResetColor();
-                    string input = Console.ReadLine() ?? string.Empty;
+                    // string input = Console.ReadLine() ?? string.Empty;
+                    string input = "";
+                    string? readIn = "";
+                    while (readIn != "SEND_CHAT" && readIn != "EXIT_CHAT")
+                    {
+                        readIn = Console.ReadLine();
+                        if (readIn.ToUpper() == "EXIT_CHAT")
+                        {
+                            Environment.Exit(0);
+                        }
+                        else if (readIn.ToUpper() != "SEND_CHAT")
+                        {
+                            input += readIn + "\n";
+                        }
+                    }
 
-                    if (input.ToLower() == "exit" || input.ToLower() == "quit")
-                        break;
-
+                    Console.WriteLine("Sending to openai...");
                     string response = chatGptClient.SendMessage(input);
 
                     Console.ForegroundColor = ConsoleColor.Blue;
