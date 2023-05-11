@@ -15,6 +15,7 @@ namespace c_sharp_openai
         private ChatGptClient(string apiKey)
         {
             _apiKey = apiKey;
+            _response = null!;
             _client = new RestClient("https://api.openai.com/v1/chat/completions");
             // _client = new RestClient("https://api.openai.com/v1/engines/text-davinci-003/completions");
         }
@@ -81,10 +82,8 @@ namespace c_sharp_openai
                     if (input.ToLower() == "exit" || input.ToLower() == "quit")
                         break;
 
-                    // Send the user's input to the ChatGPT API and receive a response
                     string response = chatGptClient.SendMessage(input);
 
-                    // Display the chatbot's response
                     Console.ForegroundColor = ConsoleColor.Blue;
                     Console.Write("Chatbot: ");
                     Console.ResetColor();
