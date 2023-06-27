@@ -1,20 +1,19 @@
-﻿using System;
-using System.Net.Http;
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Text.Json;
-using System.Threading.Tasks;
 using c_sharp_openai.Models;
 using Microsoft.Extensions.Configuration;
 
 namespace c_sharp_openai
 {
-    public class ChatGptClient
+    public class ChatGptClient : IDisposable
     {
         private readonly HttpClient _httpClient;
         private readonly JsonSerializerOptions _jsonSerializerOptions = new();
+        private readonly string _gptModel;
         
-        public ChatGptClient(string apiKey)
+        public ChatGptClient(string apiKey, string gptModel)
         {
+            _gptModel = gptModel;
             _httpClient = new HttpClient()
             {
                 BaseAddress = new Uri("https://api.openai.com/v1/chat/completions")
@@ -23,6 +22,11 @@ namespace c_sharp_openai
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             
             _jsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        }
+
+        public void Dispose()
+        {
+            _httpClient.Dispose();
         }
         
         private async Task<string> SendMessageAsync(string message)
@@ -36,7 +40,7 @@ namespace c_sharp_openai
             {
                 var jsonObject = new
                 {
-                    model = "gpt-3.5-turbo-16k",
+                    model = _gptModel,
                     temperature = 0.7,
                     messages = new[]
                     {
@@ -52,7 +56,7 @@ namespace c_sharp_openai
                 var content = new StringContent(jsonString);
                 content.Headers.ContentType = new MediaTypeWithQualityHeaderValue("application/json");
 
-                var response = await _httpClient.PostAsync("", content);
+                using var response = await _httpClient.PostAsync("", content);
                 response.EnsureSuccessStatusCode();
 
                 var jsonResponse = await response.Content.ReadAsStreamAsync();
@@ -71,44 +75,82 @@ namespace c_sharp_openai
         {
             private static async Task Main(string[] args)
             {
-                var configBuilder = new ConfigurationBuilder()
-                    .AddUserSecrets<Program>();
-                var configuration = configBuilder.Build();
-                var apiKey = configuration["ChatGPTSecrets:FirstAPIKey"] ?? throw new InvalidOperationException();
-                var chatGptClient = new ChatGptClient(apiKey);
-
+                var configuration = GetConfiguration();
+                var apiKey = configuration["ChatGPTSecrets:FirstAPIKey"] ?? 
+                                throw new InvalidOperationException("API Key not found in configuration.");
+                string gptModel = configuration["ChatGptConfig:Model"] ??
+                                throw new InvalidOperationException("GPT Model not found in configuration.");
+                
+                using var chatGptClient = new ChatGptClient(apiKey, gptModel);
                 Console.WriteLine("Welcome to the ChatGPT chatbot! Type 'exit' to quit.");
-
+                string input;
+                
                 while (true)
                 {
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("EXIT_CHAT and SEND_CHAT to do the thing");
-                    Console.Write("You: ");
-                    Console.ResetColor();
-                    // string input = Console.ReadLine() ?? string.Empty;
-                    string input = "";
-                    string? readIn = "";
-                    while (readIn != "SEND_CHAT" && readIn != "EXIT_CHAT")
+                    DisplayInstructions();
+                    input = GetUserInput();
+
+                    if (input.Equals("EXIT_CHAT", StringComparison.OrdinalIgnoreCase))
                     {
-                        readIn = Console.ReadLine();
-                        if (readIn.ToUpper() == "EXIT_CHAT")
-                        {
-                            Environment.Exit(0);
-                        }
-                        else if (readIn.ToUpper() != "SEND_CHAT")
-                        {
-                            input += readIn + "\n";
-                        }
+                        break;
+                    }
+                    
+                    if (input.Length > 0)
+                    {
+                        Console.WriteLine("Sending to openai...");
+                        string response = await chatGptClient.SendMessageAsync(input);
+                        DisplayChatBotResponse(response);
+                    }
+                }
+            }
+
+            private static IConfiguration GetConfiguration()
+            {
+                var configBuilder = new ConfigurationBuilder()
+                    .SetBasePath(AppContext.BaseDirectory)
+                    .AddJsonFile("appsettings.json")
+                    .AddUserSecrets<Program>();
+
+                return configBuilder.Build();
+            }
+
+            private static void DisplayInstructions()
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Type your message and press ENTER.");
+                Console.WriteLine("Type 'SEND_CHAT' and press ENTER to send your message.");
+                Console.WriteLine("Type 'EXIT_CHAT' and press ENTER to quit the application.");
+                Console.Write("You: ");
+                Console.ResetColor();
+            }
+
+            private static string GetUserInput()
+            {
+                string input = "";
+                string? readIn = "";
+                while (readIn != "SEND_CHAT" && readIn != "EXIT_CHAT")
+                {
+                    readIn = Console.ReadLine();
+                    if (readIn.ToUpper() == "EXIT_CHAT")
+                    {
+                        return "EXIT_CHAT";
                     }
 
-                    Console.WriteLine("Sending to openai...");
-                    string response = await chatGptClient.SendMessageAsync(input);
-
-                    Console.ForegroundColor = ConsoleColor.Blue;
-                    Console.Write("Chatbot: ");
-                    Console.ResetColor();
-                    Console.WriteLine(response);
+                    if (readIn.ToUpper() != "SEND_CHAT")
+                    {
+                        input += readIn + "\n";
+                    }
                 }
+
+                return input.Trim();
+            }
+
+            private static void DisplayChatBotResponse(string response)
+            {
+                Console.ForegroundColor = ConsoleColor.Blue;
+                Console.Write("Chatbot: ");
+                Console.ResetColor();
+                Console.WriteLine(response);
             }
         }
     }
