@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using c_sharp_openai.Models;
+﻿using c_sharp_openai.Models;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using RestSharp;
@@ -36,7 +35,7 @@ namespace c_sharp_openai
 
                 var jsonObject = new
                 {
-                    model = "gpt-3.5-turbo",
+                    model = "gpt-3.5-turbo-16k",
                     // model = "text-davinci-003",
                     temperature = 0.7,
                     messages = new[]
