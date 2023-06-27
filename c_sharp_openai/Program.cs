@@ -10,8 +10,8 @@ namespace c_sharp_openai
         private readonly HttpClient _httpClient;
         private readonly JsonSerializerOptions _jsonSerializerOptions = new();
         private readonly string _gptModel;
-        
-        public ChatGptClient(string apiKey, string gptModel)
+
+        private ChatGptClient(string apiKey, string gptModel)
         {
             _gptModel = gptModel;
             _httpClient = new HttpClient()
@@ -62,7 +62,7 @@ namespace c_sharp_openai
                 var jsonResponse = await response.Content.ReadAsStreamAsync();
                 var chatResponse =
                     (await JsonSerializer.DeserializeAsync<ChatResponse>(jsonResponse, _jsonSerializerOptions));
-                return chatResponse.choices[0].message.content;
+                return chatResponse!.choices[0].message.content;
             }
             catch (Exception ex)
             {
@@ -73,7 +73,7 @@ namespace c_sharp_openai
 
         private class Program
         {
-            private static async Task Main(string[] args)
+            private static async Task Main()
             {
                 var configuration = GetConfiguration();
                 var apiKey = configuration["ChatGPTSecrets:FirstAPIKey"] ?? 
@@ -82,13 +82,12 @@ namespace c_sharp_openai
                                 throw new InvalidOperationException("GPT Model not found in configuration.");
                 
                 using var chatGptClient = new ChatGptClient(apiKey, gptModel);
-                Console.WriteLine("Welcome to the ChatGPT chatbot! Type 'exit' to quit.");
-                string input;
+                Console.WriteLine("Welcome to the ChatGPT ChatBot! Type 'exit' to quit.");
                 
                 while (true)
                 {
                     DisplayInstructions();
-                    input = GetUserInput();
+                    var input = GetUserInput();
 
                     if (input.Equals("EXIT_CHAT", StringComparison.OrdinalIgnoreCase))
                     {
@@ -131,7 +130,7 @@ namespace c_sharp_openai
                 while (readIn != "SEND_CHAT" && readIn != "EXIT_CHAT")
                 {
                     readIn = Console.ReadLine();
-                    if (readIn.ToUpper() == "EXIT_CHAT")
+                    if (readIn!.ToUpper() == "EXIT_CHAT")
                     {
                         return "EXIT_CHAT";
                     }
@@ -148,7 +147,7 @@ namespace c_sharp_openai
             private static void DisplayChatBotResponse(string response)
             {
                 Console.ForegroundColor = ConsoleColor.Blue;
-                Console.Write("Chatbot: ");
+                Console.Write("ChatBot: ");
                 Console.ResetColor();
                 Console.WriteLine(response);
             }
