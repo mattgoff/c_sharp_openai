@@ -1,26 +1,31 @@
-﻿using c_sharp_openai.Models;
+﻿using System;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Threading.Tasks;
+using c_sharp_openai.Models;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
-using RestSharp;
 
 namespace c_sharp_openai
 {
     public class ChatGptClient
     {
-        private readonly string _apiKey;
-        private readonly RestClient _client;
-        private RestResponse _response;
+        private readonly HttpClient _httpClient;
+        private readonly JsonSerializerOptions _jsonSerializerOptions = new();
         
-
-        private ChatGptClient(string apiKey)
+        public ChatGptClient(string apiKey)
         {
-            _apiKey = apiKey;
-            _response = null!;
-            _client = new RestClient("https://api.openai.com/v1/chat/completions");
-            // _client = new RestClient("https://api.openai.com/v1/engines/text-davinci-003/completions");
+            _httpClient = new HttpClient()
+            {
+                BaseAddress = new Uri("https://api.openai.com/v1/chat/completions")
+            };
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            
+            _jsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         }
-
-        private string SendMessage(string message)
+        
+        private async Task<string> SendMessageAsync(string message)
         {
             if (string.IsNullOrWhiteSpace(message))
             {
@@ -29,14 +34,9 @@ namespace c_sharp_openai
 
             try
             {
-                var request = new RestRequest("", Method.Post);
-                request.AddHeader("Content-Type", "application/json");
-                request.AddHeader("Authorization", $"Bearer {_apiKey}");
-
                 var jsonObject = new
                 {
                     model = "gpt-3.5-turbo-16k",
-                    // model = "text-davinci-003",
                     temperature = 0.7,
                     messages = new[]
                     {
@@ -48,11 +48,17 @@ namespace c_sharp_openai
                     }
                 };
 
-                // Using python write a function that will solve for the nth number in the fibonacci sequence
-                request.AddJsonBody(JsonConvert.SerializeObject(jsonObject));
-                _response = _client.Execute(request);
-                var jsonResponse = JsonConvert.DeserializeObject<ChatResponse>(_response.Content ?? string.Empty);
-                return jsonResponse?.choices[0].message.content ?? string.Empty;
+                var jsonString = JsonSerializer.Serialize(jsonObject, _jsonSerializerOptions);
+                var content = new StringContent(jsonString);
+                content.Headers.ContentType = new MediaTypeWithQualityHeaderValue("application/json");
+
+                var response = await _httpClient.PostAsync("", content);
+                response.EnsureSuccessStatusCode();
+
+                var jsonResponse = await response.Content.ReadAsStreamAsync();
+                var chatResponse =
+                    (await JsonSerializer.DeserializeAsync<ChatResponse>(jsonResponse, _jsonSerializerOptions));
+                return chatResponse.choices[0].message.content;
             }
             catch (Exception ex)
             {
@@ -63,7 +69,7 @@ namespace c_sharp_openai
 
         private class Program
         {
-            private static void Main(string[] args)
+            private static async Task Main(string[] args)
             {
                 var configBuilder = new ConfigurationBuilder()
                     .AddUserSecrets<Program>();
@@ -96,7 +102,7 @@ namespace c_sharp_openai
                     }
 
                     Console.WriteLine("Sending to openai...");
-                    string response = chatGptClient.SendMessage(input);
+                    string response = await chatGptClient.SendMessageAsync(input);
 
                     Console.ForegroundColor = ConsoleColor.Blue;
                     Console.Write("Chatbot: ");
