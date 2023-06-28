@@ -1,4 +1,5 @@
 ﻿using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using c_sharp_openai.Models;
 using Microsoft.Extensions.Configuration;
@@ -10,6 +11,7 @@ namespace c_sharp_openai
         private readonly HttpClient _httpClient;
         private readonly JsonSerializerOptions _jsonSerializerOptions = new();
         private readonly string _gptModel;
+        private ChatObject _chatObject { get; set; }
 
         private ChatGptClient(string apiKey, string gptModel)
         {
@@ -20,13 +22,28 @@ namespace c_sharp_openai
             };
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            
+
             _jsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            _chatObject = new ChatObject()
+            {
+                model = _gptModel,
+                temperature = 0.7,
+                messages = Array.Empty<Message>()
+            };
         }
 
         public void Dispose()
         {
             _httpClient.Dispose();
+        }
+        
+        private void UpdateJsonObject(string message, string role)
+        {
+            _chatObject.messages = _chatObject.messages.Append(new Message()
+            {
+                role = role,
+                content = message
+            }).ToArray();
         }
         
         private async Task<string> SendMessageAsync(string message)
@@ -38,21 +55,9 @@ namespace c_sharp_openai
 
             try
             {
-                var jsonObject = new
-                {
-                    model = _gptModel,
-                    temperature = 0.7,
-                    messages = new[]
-                    {
-                        new
-                        {
-                            role = "user",
-                            content = message
-                        }
-                    }
-                };
+                UpdateJsonObject(message, "user");
 
-                var jsonString = JsonSerializer.Serialize(jsonObject, _jsonSerializerOptions);
+                var jsonString = JsonSerializer.Serialize(_chatObject, _jsonSerializerOptions);
                 var content = new StringContent(jsonString);
                 content.Headers.ContentType = new MediaTypeWithQualityHeaderValue("application/json");
 
@@ -62,7 +67,9 @@ namespace c_sharp_openai
                 var jsonResponse = await response.Content.ReadAsStreamAsync();
                 var chatResponse =
                     (await JsonSerializer.DeserializeAsync<ChatResponse>(jsonResponse, _jsonSerializerOptions));
-                return chatResponse!.choices[0].message.content;
+                var responseMessage = chatResponse!.choices[0].message;
+                UpdateJsonObject(responseMessage.content, responseMessage.role);
+                return responseMessage.content;
             }
             catch (Exception ex)
             {
@@ -82,11 +89,14 @@ namespace c_sharp_openai
                                 throw new InvalidOperationException("GPT Model not found in configuration.");
                 
                 using var chatGptClient = new ChatGptClient(apiKey, gptModel);
-                Console.WriteLine("Welcome to the ChatGPT ChatBot! Type 'exit' to quit.");
+                DisplayInstructions();
                 
                 while (true)
                 {
-                    DisplayInstructions();
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.Write("You: ");
+                    Console.ResetColor();
+
                     var input = GetUserInput();
 
                     if (input.Equals("EXIT_CHAT", StringComparison.OrdinalIgnoreCase))
@@ -119,7 +129,6 @@ namespace c_sharp_openai
                 Console.WriteLine("Type your message and press ENTER.");
                 Console.WriteLine("Type 'SEND_CHAT' and press ENTER to send your message.");
                 Console.WriteLine("Type 'EXIT_CHAT' and press ENTER to quit the application.");
-                Console.Write("You: ");
                 Console.ResetColor();
             }
 
