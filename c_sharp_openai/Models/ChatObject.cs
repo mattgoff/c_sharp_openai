@@ -1,8 +1,13 @@
+using System.Text.Json.Serialization;
+
 namespace c_sharp_openai.Models;
 
-public class ChatObject
+public class ChatObjectClass
 {
-    public string model { get; set; }
-    public double temperature { get; set; }
-    public Message[] messages { get; set; }
+    [JsonPropertyName("model")]
+    public string Model { get; set; }
+    [JsonPropertyName("temperature")]
+    public double Temperature { get; set; }
+    [JsonPropertyName("messages")]
+    public Message[] Messages { get; set; }
 }
